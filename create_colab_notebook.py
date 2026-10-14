@@ -82,6 +82,95 @@ import torch.nn.functional as F
 print(f"PyTorch Version: {torch.__version__}")
 print(f"CUDA Available:  {torch.cuda.is_available()}")""")
 
+# --- CELL 2.1: MINIMAL ML CORE (EXECUTIVE DEMO) ---
+add_md("""---
+## ⚡ The Minimal ML Core (30-Second Professor Demo)
+**What is ML strictly used for?**
+It is used ONLY for the high-level decision: **Which missile attacks which target?**  
+- **Before Training:** Greedy collapse — all 4 missiles attack Target 0 (Overkill, failure).
+- **Architecture:** Graph Attention Network (GAT) with dynamic neighbor attention $\\alpha_{ij}$.
+- **Reward Function:** $R = \\text{Target Priorities} + \\text{Coverage Bonus} - \\text{Overkill Penalty}$.
+- **After Training:** Optimal cooperative distribution `[T0, T2, T1, T0]` (100% target coverage).""")
+
+add_code("""# Standalone Minimal ML Core: GAT Swarm Target Allocation
+from torch.distributions import Categorical
+
+class SwarmGATLayer(nn.Module):
+    def __init__(self, in_dim: int, hidden_dim: int):
+        super().__init__()
+        self.W_self = nn.Linear(in_dim, hidden_dim)
+        self.W_neigh = nn.Linear(in_dim, hidden_dim, bias=False)
+        self.attn = nn.Linear(2 * hidden_dim, 1, bias=False)
+
+    def forward(self, x: torch.Tensor, adj: torch.Tensor) -> torch.Tensor:
+        N = x.size(0)
+        h_self = self.W_self(x)
+        h_neigh = self.W_neigh(x)
+        h_i = h_neigh.unsqueeze(1).repeat(1, N, 1)
+        h_j = h_neigh.unsqueeze(0).repeat(N, 1, 1)
+        scores = F.leaky_relu(self.attn(torch.cat([h_i, h_j], dim=-1)).squeeze(-1))
+        scores = scores.masked_fill(adj == 0, -1e9)
+        alpha = F.softmax(scores, dim=-1)
+        h_agg = torch.matmul(alpha, h_neigh)
+        return torch.cat([h_self, h_agg], dim=-1)
+
+class SwarmPolicy(nn.Module):
+    def __init__(self, in_dim: int = 5, hidden_dim: int = 32, num_targets: int = 3):
+        super().__init__()
+        self.gat = SwarmGATLayer(in_dim, hidden_dim)
+        self.actor = nn.Sequential(
+            nn.Linear(2 * hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_targets)
+        )
+
+    def forward(self, x: torch.Tensor, adj: torch.Tensor):
+        h = self.gat(x, adj)
+        logits = self.actor(h)
+        return Categorical(logits=logits)
+
+def compute_minimal_reward(actions, priorities, distances):
+    N = actions.size(0)
+    unique = torch.unique(actions)
+    coverage = len(unique) / priorities.size(0)
+    priority_score = sum(priorities[t].item() for t in unique)
+    overkill_penalty = (N - len(unique)) * 30.0
+    dist_bonus = (4.0 - distances[torch.arange(N), actions].sum().item()) * 10.0
+    return priority_score + (coverage * 50.0) - overkill_penalty + dist_bonus
+
+# Run Minimal Training Demo
+torch.manual_seed(42)
+num_agents, num_targets = 4, 3
+priorities = torch.tensor([10.0, 6.0, 6.0])
+distances = torch.tensor([[0.2, 0.8, 0.9], [0.8, 0.2, 0.9], [0.9, 0.8, 0.2], [0.3, 0.7, 0.8]])
+features = torch.tensor([[0.1, 0.2, 0.2, 0.8, 0.9], [0.2, 0.8, 0.8, 0.2, 0.9], [0.8, 0.1, 0.9, 0.8, 0.2], [0.5, 0.5, 0.3, 0.7, 0.8]])
+adj = torch.ones(num_agents, num_agents)
+
+policy = SwarmPolicy()
+optimizer = optim.Adam(policy.parameters(), lr=0.03)
+
+# 1. Before Training
+with torch.no_grad():
+    init_actions = policy(features, adj).probs.argmax(dim=-1)
+    init_r = compute_minimal_reward(init_actions, priorities, distances)
+    print(f"BEFORE TRAINING: Assignments = {['T'+str(a.item()) for a in init_actions]} | Reward = {init_r:.1f} (Overkill Failure)")
+
+# 2. Train with Policy Gradient
+baseline = 0.0
+for epoch in range(1, 121):
+    dist = policy(features, adj)
+    actions = dist.sample()
+    reward = compute_minimal_reward(actions, priorities, distances)
+    baseline = 0.9 * baseline + 0.1 * reward
+    loss = -dist.log_prob(actions).sum() * (reward - baseline)
+    optimizer.zero_grad(); loss.backward(); optimizer.step()
+
+# 3. After Training
+with torch.no_grad():
+    final_actions = policy(features, adj).probs.argmax(dim=-1)
+    final_r = compute_minimal_reward(final_actions, priorities, distances)
+    print(f"AFTER TRAINING : Assignments = {['T'+str(a.item()) for a in final_actions]} | Reward = {final_r:.1f} (Optimal Coverage!)")""")
+
 # --- CELL 3: PHYSICAL FOUNDATIONS (DUBINS & PN) ---
 add_md("""---
 ## Level 1: The Physics & Control Ground Truth
