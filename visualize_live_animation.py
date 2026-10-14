@@ -17,7 +17,7 @@ import os
 import sys
 import math
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 import matplotlib
 if "--no-gui" in sys.argv:
@@ -54,10 +54,14 @@ def precompute_salvo_trajectory(
     comm_range_m: float = 12000.0,
     safe_separation_m: float = 200.0,
     lethal_radius_m: float = 10.0,
+    assignments: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     """
     Simulates the engagement tick-by-tick and records exact states for animation rendering.
     """
+    if assignments is None:
+        assignments = [0, 1, 2, 0]  # Default: M0->T0, M1->T1, M2->T2, M3->T0
+
     # 4 Missiles in staggered echelon
     missiles = [
         MissileState(x=0.0, y=0.0, heading=0.0, velocity=500.0, max_lateral_accel=25.0 * G_ACCEL),
@@ -73,7 +77,6 @@ def precompute_salvo_trajectory(
         TargetState(target_id=2, x=10000.0, y=-3000.0, vx=0.0, vy=15.0, priority=4.0),  # Launcher
     ]
 
-    assignments = [0, 1, 2, 0]  # M0->T0, M1->T1, M2->T2, M3->T0
     n_missiles = len(missiles)
     active = [True] * n_missiles
 
@@ -292,16 +295,27 @@ def create_swarm_animation(
 
 
 if __name__ == "__main__":
-    show_gui = "--no-gui" not in sys.argv
+    import argparse
+    parser = argparse.ArgumentParser(description="Live 2D Swarm Radar Visualizer with Parameter Controls")
+    parser.add_argument("--assignments", type=int, nargs="+", default=[0, 1, 2, 0],
+                        help="Target assignment per missile (e.g., 0 0 0 0 for greedy overkill, 0 1 2 0 for cooperative bifurcation)")
+    parser.add_argument("--save-gif", action="store_true", help="Save the animation to a GIF file")
+    parser.add_argument("--no-gui", action="store_true", help="Run without opening GUI window")
+    args = parser.parse_args()
 
-    logger.info("Precomputing salvo flight data...")
-    salvo_data = precompute_salvo_trajectory(dt=0.04)
+    custom_assignments = args.assignments
+    if len(custom_assignments) != 4:
+        logger.warning(f"Expected 4 assignments, got {len(custom_assignments)}. Falling back to [0, 1, 2, 0].")
+        custom_assignments = [0, 1, 2, 0]
 
-    gif_out = os.path.join(current_dir, "figures", "swarm_salvo_animation.gif")
+    logger.info(f"Running simulation with target assignments: {custom_assignments}")
+    salvo_data = precompute_salvo_trajectory(dt=0.04, assignments=custom_assignments)
+
+    gif_out = os.path.join(current_dir, "figures", "swarm_salvo_animation.gif") if args.save_gif else None
     anim = create_swarm_animation(salvo_data, save_gif_path=gif_out)
 
-    if show_gui:
+    if not args.no_gui:
         logger.info("Opening live interactive animation window on screen...")
         plt.show()
     else:
-        logger.info("Animation GIF saved. Exiting without opening GUI window.")
+        logger.info("Finished headless run.")

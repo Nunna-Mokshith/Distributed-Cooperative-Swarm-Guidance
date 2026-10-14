@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from typing import Optional, List
 
 # -------------------------------------------------------------
 # 1. MINIMAL GRAPH ATTENTION LAYER WITH RESIDUAL CONNECTION
@@ -70,7 +71,7 @@ class SwarmPolicy(nn.Module):
 # -------------------------------------------------------------
 # 3. MULTI-OBJECTIVE REWARD FUNCTION
 # -------------------------------------------------------------
-def compute_reward(actions: torch.Tensor, target_priorities: torch.Tensor, distances: torch.Tensor) -> float:
+def compute_reward(actions: torch.Tensor, target_priorities: torch.Tensor, distances: torch.Tensor, overkill_weight: float = 30.0) -> float:
     """
     Rewards hitting high-priority targets and full target coverage.
     Penalizes duplicate target assignments (overkill) and distance inefficiency.
@@ -84,8 +85,8 @@ def compute_reward(actions: torch.Tensor, target_priorities: torch.Tensor, dista
     # Priority reward
     priority_score = sum(target_priorities[t].item() for t in unique_targets)
     
-    # Overkill penalty: -30 for every duplicate agent on the same target
-    overkill_penalty = (N - len(unique_targets)) * 30.0
+    # Overkill penalty: penalty for every duplicate agent on the same target
+    overkill_penalty = (N - len(unique_targets)) * overkill_weight
     
     # Proximity efficiency: reward agents attacking closer targets
     chosen_dist = distances[torch.arange(N), actions].sum().item()
@@ -97,13 +98,15 @@ def compute_reward(actions: torch.Tensor, target_priorities: torch.Tensor, dista
 # -------------------------------------------------------------
 # 4. TRAINING DEMONSTRATION
 # -------------------------------------------------------------
-def train_minimal_swarm(epochs: int = 120):
+def train_minimal_swarm(epochs: int = 120, overkill_weight: float = 30.0, priorities: Optional[List[float]] = None):
     torch.manual_seed(42)
     num_agents = 4
     num_targets = 3
 
-    # Target priorities: T0 is Radar (+10), T1 is Command (+6), T2 is Depot (+6)
-    target_priorities = torch.tensor([10.0, 6.0, 6.0])
+    if priorities is None:
+        target_priorities = torch.tensor([10.0, 6.0, 6.0])
+    else:
+        target_priorities = torch.tensor(priorities)
 
     # Distance matrix between 4 missiles and 3 targets
     # Missile 0 is closest to T0 (0.2)
@@ -139,7 +142,7 @@ def train_minimal_swarm(epochs: int = 120):
     with torch.no_grad():
         dist = policy(features, adj)
         init_actions = dist.probs.argmax(dim=-1)
-        init_r = compute_reward(init_actions, target_priorities, distances)
+        init_r = compute_reward(init_actions, target_priorities, distances, overkill_weight)
         print(f"Target Assignments : {['T' + str(a.item()) for a in init_actions]}")
         print(f"Target Probabilities:\n{dist.probs.round(decimals=2)}")
         print(f"Team Reward        : {init_r:.2f} (Failure: Collapsed / Redundant assignments)\n")
@@ -151,7 +154,7 @@ def train_minimal_swarm(epochs: int = 120):
         actions = dist.sample()
         log_prob = dist.log_prob(actions).sum()
 
-        reward = compute_reward(actions, target_priorities, distances)
+        reward = compute_reward(actions, target_priorities, distances, overkill_weight)
         baseline = 0.9 * baseline + 0.1 * reward
         advantage = reward - baseline
 
@@ -168,7 +171,7 @@ def train_minimal_swarm(epochs: int = 120):
     with torch.no_grad():
         final_dist = policy(features, adj)
         final_actions = final_dist.probs.argmax(dim=-1)
-        final_r = compute_reward(final_actions, target_priorities, distances)
+        final_r = compute_reward(final_actions, target_priorities, distances, overkill_weight)
         print(f"Final Assignments  : {['T' + str(a.item()) for a in final_actions]}")
         print(f"Target Probabilities:\n{final_dist.probs.round(decimals=2)}")
         print(f"Team Reward        : {final_r:.2f} (Success: 100% Target Coverage & Zero Redundancy!)")
@@ -229,5 +232,14 @@ def visualize_allocations(init_actions, final_actions):
     print(f"\n[Visualization Saved] -> {out_path}")
 
 if __name__ == "__main__":
-    train_minimal_swarm()
+    import argparse
+    parser = argparse.ArgumentParser(description="Minimal GAT Target Allocation with Parameter Controls")
+    parser.add_argument("--overkill", type=float, default=30.0,
+                        help="Penalty weight for duplicate target assignment (set 0.0 for greedy collapse, 30.0 for cooperation)")
+    parser.add_argument("--priorities", type=float, nargs=3, default=[10.0, 6.0, 6.0],
+                        help="Priorities for targets T0, T1, T2 (e.g. 10.0 6.0 6.0)")
+    parser.add_argument("--epochs", type=int, default=120, help="Number of training epochs")
+    args = parser.parse_args()
+
+    train_minimal_swarm(epochs=args.epochs, overkill_weight=args.overkill, priorities=args.priorities)
 
