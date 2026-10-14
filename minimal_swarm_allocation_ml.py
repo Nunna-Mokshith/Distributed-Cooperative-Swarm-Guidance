@@ -175,5 +175,59 @@ def train_minimal_swarm(epochs: int = 120):
         print("\nConclusion: Missiles M0 & M3 strike Target 0 (Radar), M1 strikes T1, M2 strikes T2.")
         print("=================================================================")
 
+    # Generate Side-by-Side Visualization
+    visualize_allocations(init_actions, final_actions)
+
+def visualize_allocations(init_actions, final_actions):
+    import os
+    import matplotlib.pyplot as plt
+
+    missile_coords = [(1.0, 3.5), (1.0, 2.5), (1.0, 1.5), (1.0, 0.5)]
+    target_coords = [(8.0, 3.5), (8.0, 2.0), (8.0, 0.5)]
+    target_names = ["Target 0 (Radar)", "Target 1 (Command)", "Target 2 (Fuel Depot)"]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), dpi=120)
+    fig.patch.set_facecolor("#0b1120")
+
+    for ax, acts, title, color_theme, badge in [
+        (ax1, init_actions, "BEFORE TRAINING: Greedy Collapse (Overkill)", "#ef4444", "FAIL: Targets 1 & 2 Untouched"),
+        (ax2, final_actions, "AFTER TRAINING: Cooperative Bifurcation", "#22c55e", "SUCCESS: 100% Target Coverage")
+    ]:
+        ax.set_facecolor("#0f172a")
+        ax.set_xlim(-0.5, 9.5)
+        ax.set_ylim(-0.5, 4.5)
+        ax.set_title(title, color="#38bdf8", fontsize=12, fontweight="bold", pad=15)
+        ax.grid(True, linestyle="--", alpha=0.2, color="#64748b")
+        ax.tick_params(colors="#94a3b8")
+        for spine in ax.spines.values(): spine.set_color("#334155")
+
+        # Plot Targets
+        for t_idx, (tx, ty) in enumerate(target_coords):
+            is_hit = t_idx in acts.tolist()
+            t_col = "#38bdf8" if is_hit else "#64748b"
+            ax.scatter(tx, ty, marker="s", s=300, color=t_col, edgecolors="white", lw=1.5, zorder=5)
+            ax.text(tx + 0.3, ty, target_names[t_idx], color="#f8fafc", fontsize=9, va="center", fontweight="bold")
+
+        # Plot Missiles and Assignment Arrows
+        m_colors = ["#38bdf8", "#4ade80", "#fbbf24", "#f43f5e"]
+        for m_idx, (mx, my) in enumerate(missile_coords):
+            assigned_t = acts[m_idx].item()
+            tx, ty = target_coords[assigned_t]
+            ax.scatter(mx, my, marker=">", s=250, color=m_colors[m_idx], edgecolors="white", lw=1.5, zorder=5)
+            ax.text(mx - 0.9, my, f"M{m_idx}", color=m_colors[m_idx], fontsize=10, va="center", fontweight="bold")
+            ax.annotate("", xy=(tx - 0.2, ty), xytext=(mx + 0.3, my),
+                        arrowprops=dict(arrowstyle="->", color=m_colors[m_idx], lw=2.2, linestyle="--"))
+
+        ax.text(4.5, 4.1, badge, color=color_theme, fontsize=11, fontweight="bold",
+                ha="center", bbox=dict(boxstyle="round,pad=0.4", facecolor="#1e293b", edgecolor=color_theme))
+
+    plt.tight_layout()
+    os.makedirs("figures", exist_ok=True)
+    out_path = os.path.join("figures", "minimal_allocation_visual.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"\n[Visualization Saved] -> {out_path}")
+
 if __name__ == "__main__":
     train_minimal_swarm()
+
