@@ -58,7 +58,10 @@ class TargetState:
     target_id: int
     x: float
     y: float
-    vy: float = 0.0  # Lateral drift velocity in m/s
+    vx: float = -90.0            # Inbound cruise velocity in m/s (approaching defense perimeter)
+    vy: float = 0.0              # Base lateral velocity in m/s
+    maneuver_freq: float = 0.35  # Evasive sinusoidal weave frequency in rad/s
+    maneuver_amp: float = 50.0   # Evasive maneuver amplitude in m/s
     alive: bool = True
     trajectory: List[Tuple[float, float]] = field(default_factory=list)
 
@@ -83,12 +86,19 @@ def step_motion(
     self_destructed_drones = []
     target_dict = {t.target_id: t for t in targets}
 
-    # 1. Update target positions
+    # 1. Update target positions (Active Inbound Evasive Flight)
     for target in targets:
         if not target.alive:
             continue
         target.trajectory.append((target.x, target.y))
-        target.y += target.vy * dt
+        
+        # Inbound motion + active sinusoidal evasive weaving
+        step_idx = len(target.trajectory)
+        t_sim = step_idx * dt
+        lateral_evasion = target.vy + target.maneuver_amp * math.sin(target.maneuver_freq * t_sim + target.target_id * 1.5)
+        
+        target.x += target.vx * dt
+        target.y += lateral_evasion * dt
 
     active_target_count = sum(1 for t in targets if t.alive)
 
@@ -303,8 +313,19 @@ def initialize_scenario(num_drones: int = 4, num_targets: int = 3) -> Tuple[List
     for j in range(num_targets):
         y_pos = (j - (num_targets - 1) / 2.0) * y_spread
         x_pos = 10000.0 + (j % 2) * 500.0
-        vy = 20.0 if (j % 2 == 0) else -20.0
-        targets.append(TargetState(target_id=j, x=x_pos, y=y_pos, vy=vy))
+        # Realistic dynamic inbound cruise at 90 m/s with staggered sinusoidal weaving
+        vy_base = 20.0 if (j % 2 == 0) else -20.0
+        freq = 0.30 + 0.08 * j
+        amp = 45.0 + 10.0 * (j % 2)
+        targets.append(TargetState(
+            target_id=j,
+            x=x_pos,
+            y=y_pos,
+            vx=-90.0,
+            vy=vy_base,
+            maneuver_freq=freq,
+            maneuver_amp=amp,
+        ))
 
     return drones, targets
 
@@ -414,11 +435,12 @@ def run_visualization(runner: SwarmSimulationRunner, save_plot: bool = False, no
 
         # Draw Targets (Clean T0, T1, T2 labels)
         for t in runner.targets:
-            c = '#FF0055' if t.alive else '#4A5568'
-            marker = 'D' if t.alive else 'x'
-            ax_map.scatter(t.x, t.y, color=c, marker=marker, s=120, edgecolors='#FFFFFF', linewidths=1.2, zorder=5)
-            status_text = f"Target T{t.target_id}" if t.alive else f"T{t.target_id} [DESTROYED]"
-            ax_map.text(t.x + 150, t.y + 120, status_text, color='#FF5577' if t.alive else '#718096', fontsize=9, fontweight='bold')
+            if t.alive:
+                ax_map.scatter(t.x, t.y, color='#FF0055', marker='D', s=120, edgecolors='#FFFFFF', linewidths=1.2, zorder=5)
+                ax_map.text(t.x + 150, t.y + 120, f"Target T{t.target_id}", color='#FF5577', fontsize=9, fontweight='bold')
+            else:
+                ax_map.scatter(t.x, t.y, color='#4A5568', marker='x', s=120, linewidths=2.0, zorder=5)
+                ax_map.text(t.x + 150, t.y + 120, f"T{t.target_id} [DESTROYED]", color='#718096', fontsize=9, fontweight='bold')
             if len(t.trajectory) > 1:
                 xs, ys = zip(*t.trajectory[-40:])
                 ax_map.plot(xs, ys, color='#FF0055', alpha=0.25, linewidth=1.0)
