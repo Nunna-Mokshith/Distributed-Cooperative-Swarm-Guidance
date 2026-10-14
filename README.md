@@ -4,6 +4,9 @@
 **Author:** Nunna Mokshith | B.Tech Robotics & AI  
 **Domain:** Multi-Agent Robotics, Graph Neural Networks (GNN), Guidance, Navigation & Control (GNC), Reinforcement Learning (MARL)
 
+> **Base System (`base` branch):**  
+> This branch hosts the standalone single-file core implementation ([`main.py`](./main.py) / [`run_simulation.py`](./run_simulation.py)) featuring real-time decentralized GAT target allocation, fail-safe surplus self-destruction, and tactical telemetry. Run with `py main.py` or `py main.py --no-gui`.
+
 ---
 
 ## 🚀 Project Overview
