@@ -135,7 +135,7 @@ def train_minimal_swarm(epochs: int = 120, overkill_weight: float = 30.0, priori
     optimizer = optim.Adam(policy.parameters(), lr=0.03)
 
     print("=================================================================")
-    print("   MINIMAL MACHINE LEARNING CORE: SWARM TARGET ALLOCATION GAT    ")
+    print("                SWARM TARGET ALLOCATION USING GAT                ")
     print("=================================================================\n")
 
     print("--- [1. BEFORE TRAINING: Initial Greedy / Overkill Policy] ---")

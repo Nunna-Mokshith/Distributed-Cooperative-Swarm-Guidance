@@ -27,7 +27,7 @@ def generate_terminal_image():
 
     terminal_text = """
 =================================================================
-   MINIMAL MACHINE LEARNING CORE: SWARM TARGET ALLOCATION GAT    
+                SWARM TARGET ALLOCATION USING GAT                
 =================================================================
 
 --- [1. BEFORE TRAINING: Initial Greedy / Overkill Policy] ---

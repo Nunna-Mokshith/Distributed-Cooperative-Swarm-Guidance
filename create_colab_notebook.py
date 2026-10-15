@@ -82,9 +82,9 @@ import torch.nn.functional as F
 print(f"PyTorch Version: {torch.__version__}")
 print(f"CUDA Available:  {torch.cuda.is_available()}")""")
 
-# --- CELL 2.1: MINIMAL ML CORE (EXECUTIVE DEMO) ---
+# --- CELL 2.1: SWARM TARGET ALLOCATION USING GAT ---
 add_md("""---
-## ⚡ The Minimal ML Core (30-Second Professor Demo)
+## ⚡ Swarm Target Allocation using GAT
 **What is ML strictly used for?**
 It is used ONLY for the high-level decision: **Which missile attacks which target?**  
 - **Before Training:** Greedy collapse — all 4 missiles attack Target 0 (Overkill, failure).
@@ -92,7 +92,7 @@ It is used ONLY for the high-level decision: **Which missile attacks which targe
 - **Reward Function:** $R = \\text{Target Priorities} + \\text{Coverage Bonus} - \\text{Overkill Penalty}$.
 - **After Training:** Optimal cooperative distribution `[T0, T2, T1, T0]` (100% target coverage).""")
 
-add_code("""# Standalone Minimal ML Core: GAT Swarm Target Allocation
+add_code("""# Swarm Target Allocation using GAT (PyTorch Core)
 from torch.distributions import Categorical
 
 class SwarmGATLayer(nn.Module):
